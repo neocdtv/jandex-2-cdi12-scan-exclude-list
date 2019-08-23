@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.neocdtv</groupId>
+    <artifactId>jandex-2-cdi12-scan-exclude-list</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <name>jandex-2-cdi12-scan-exclude-list</name>
+
+    <properties>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
+        <jandex.version>2.1.1.Final</jandex.version>
+        <tycho-compiler-jdt.version>1.4.0</tycho-compiler-jdt.version>
+        <jandex-maven-plugin.version>1.0.5</jandex-maven-plugin.version>
+        <shade.version>3.1.0</shade.version>
+    </properties>
+
+    <dependencies>
+        <!-- https://mvnrepository.com/artifact/javax/javaee-api -->
+        <dependency>
+            <groupId>javax</groupId>
+            <artifactId>javaee-api</artifactId>
+            <version>7.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss</groupId>
+            <artifactId>jandex</artifactId>
+            <version>${jandex.version}</version>
+        </dependency>
+
+    </dependencies>
+    <build>
+        <finalName>jandex-2-cdi12-scan-exclude-list</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>${shade.version}</version>
+                <configuration>
+                    <createDependencyReducedPom>
+                        true
+                    </createDependencyReducedPom>
+                    <filters>
+                        <filter>
+                            <artifact>*:*</artifact>
+                            <excludes>
+                                <exclude>META-INF/*.SF</exclude>
+                                <exclude>META-INF/*.DSA</exclude>
+                                <exclude>META-INF/*.RSA</exclude>
+                            </excludes>
+                        </filter>
+                    </filters>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>
+                                        io.neocdtv.jandex2cdi.Main
+                                    </mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jboss.jandex</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>
+                <version>${jandex-maven-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>make-index</id>
+                        <goals>
+                            <goal>jandex</goal>
+                        </goals>
+                        <!-- phase is 'process-classes by default' -->
+                        <configuration>
+                            <!-- Nothing needed here for simple cases -->
+                        </configuration>
+                    </execution>
+                </executions>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.jboss</groupId>
+                        <artifactId>jandex</artifactId>
+                        <version>${jandex.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>development</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <version>${maven-compiler-plugin.version}</version>
+                        <configuration>
+                            <useIncrementalCompilation>false</useIncrementalCompilation>
+                            <compilerId>jdt</compilerId>
+                            <source>${maven.compiler.source}</source>
+                            <target>${maven.compiler.target}</target>
+                            <showWarnings>true</showWarnings>
+                            <showDeprecation>true</showDeprecation>
+                        </configuration>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.eclipse.tycho</groupId>
+                                <artifactId>tycho-compiler-jdt</artifactId>
+                                <version>${tycho-compiler-jdt.version}</version>
+                            </dependency>
+                        </dependencies>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>
