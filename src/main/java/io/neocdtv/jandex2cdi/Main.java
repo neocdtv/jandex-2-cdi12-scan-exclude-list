@@ -79,7 +79,8 @@ public class Main {
   }
 
   private static void usage() {
-    System.out.println("usage todo");
+    System.out.println("Usage:");
+    System.out.println("  java -jar target/java -jar target/jandex-2-cdi12-scan-exclude-list.jar path-to-jandex.idx");
   }
 
   // TODO: what todo with this one
@@ -127,11 +128,11 @@ public class Main {
   }
 
   private static void printClasses(Index index) {
-    final Set<String> classes = index.getKnownClasses().stream().map(classInfo -> classInfo.toString()).collect(Collectors.toSet());
     System.out.println("CLASSES: ");
-    for (String clazz : classes) {
-      System.out.println("  CLASS: " + clazz);
+    for (ClassInfo classInfo : index.getKnownClasses()) {
+      System.out.println("  CLASS: " + classInfo.toString() + ", " + classInfo.nestingType());
     }
+
   }
 
   private static void findProducers(final Index index) {
@@ -163,6 +164,7 @@ public class Main {
   }
 
   private static void calculateScanExclude(final Index index) {
+    // TODO: decide if the inclusion of inner classes in the exclusion list does make sense
     final Set<String> excludedFromScanning = index.getKnownClasses().stream().map(classInfo -> classInfo.toString()).collect(Collectors.toSet());
     excludedFromScanning.removeAll(SESSION_BEANS);
     excludedFromScanning.removeAll(CDI_SCOPED_BEANS);
