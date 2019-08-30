@@ -7,17 +7,41 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.IndexReader;
+import org.jboss.jandex.Indexer;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathExpression;
+import javax.xml.xpath.XPathExpressionException;
+import javax.xml.xpath.XPathFactory;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class Main {
   public final static Set<String> SESSION_BEANS = new HashSet<>();
@@ -50,16 +74,26 @@ public class Main {
   static {
   }
 
+  private static final boolean DEBUG = false;
+
+  private final static String ARG_NAME_DIR = "dir";
+  private final static String ARG_NAME_IDX = "idx";
+  private final static String ARG_NAME_BEANS_XML = "beansXml";
+
   // TODO: inner classes
-  public static void main(String[] args) throws IOException {
-    if (args.length != 1) {
+  public static void main(String[] args) throws IOException, ParserConfigurationException, SAXException, TransformerException, XPathExpressionException {
+
+    Index index = null;
+    final String dir = CliUtil.findCommandArgumentByName(ARG_NAME_DIR, args);
+    final String idx = CliUtil.findCommandArgumentByName(ARG_NAME_IDX, args);
+    if (dir != null) {
+      index = buildIndex(dir);
+    } else if (idx != null) {
+      index = readIndex(idx);
+    } else {
       usage();
       System.exit(1);
     }
-    final String jandexPath = args[0];
-    FileInputStream input = new FileInputStream(jandexPath);
-    IndexReader reader = new IndexReader(input);
-    Index index = reader.read();
 
     printClasses(index);
     findEJBs(index);
@@ -70,12 +104,102 @@ public class Main {
     findDecorators(index);
     findProducers(index);
     findQualifierAnnotated(index);
+    // is include list faster then exclude?
     calculateScanWeldInclude(index);
-    calculateScanExclude(index);
-    // update beans.xml
-    // - parse beans.xml
-    // - if present remove scan node
-    // - add new scan node
+
+    final Set<String> scanExclude = calculateScanExclude(index);
+
+    final String cdiConfig = CliUtil.findCommandArgumentByName(ARG_NAME_BEANS_XML, args);
+    if (cdiConfig != null) {
+      updateBeansXml(cdiConfig, scanExclude);
+    } else {
+      printScanExclude(scanExclude);
+    }
+  }
+
+  private static void printScanExclude(final Set<String> excludedFromScanning) {
+    StringBuilder snippet = new StringBuilder();
+    snippet.append("<scan>\n");
+    final String template = "  <exclude name=\"%s\" />";
+
+    for (String entry : excludedFromScanning) {
+      if (!MANUALLY_REMOVED_FROM_EXCLUSION.contains(entry) && !isPackageInfo(entry)) {
+        snippet.append(String.format(template, entry));
+        snippet.append("\n");
+      }
+    }
+    snippet.append("</scan>\n");
+    System.out.println(snippet.toString());
+  }
+
+  private static void updateBeansXml(final String beansXmlPath, final Set<String> scanExclude) throws ParserConfigurationException, IOException, SAXException, TransformerException, XPathExpressionException {
+    Document beansXml = readXml(beansXmlPath);
+    final Element document = beansXml.getDocumentElement();
+    document.normalize();
+    final NodeList scan = document.getElementsByTagName("scan");
+    if (scan.getLength() == 1) {
+      // remove
+    }
+
+    final Element scanElement = beansXml.createElement("scan");
+    for (String s : scanExclude) {
+      final Element exclude = beansXml.createElement("exclude");
+      exclude.setAttribute("name", s);
+      scanElement.appendChild(exclude);
+    }
+    document.appendChild(scanElement);
+
+    writeXml(beansXmlPath, document);
+  }
+
+  private static void writeXml(String beansXmlPath, Element document) throws TransformerException, XPathExpressionException {
+    XPathExpression xpath = XPathFactory.newInstance().newXPath().compile("//text()[normalize-space(.) = '']");
+    NodeList blankTextNodes = (NodeList) xpath.evaluate(document, XPathConstants.NODESET);
+
+    for (int i = 0; i < blankTextNodes.getLength(); i++) {
+      blankTextNodes.item(i).getParentNode().removeChild(blankTextNodes.item(i));
+    }
+
+    TransformerFactory transformerFactory = TransformerFactory.newInstance();
+    Transformer transformer = transformerFactory.newTransformer();
+    transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
+    transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
+    transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+    transformer.setOutputProperty(OutputKeys.DOCTYPE_PUBLIC, "yes");
+    DOMSource domSource = new DOMSource(document);
+    StreamResult streamResult = new StreamResult(new File(beansXmlPath));
+    transformer.transform(domSource, streamResult);
+  }
+
+  private static Document readXml(String beansXmlPath) throws ParserConfigurationException, SAXException, IOException {
+    DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+    DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+    return dBuilder.parse(new File(beansXmlPath));
+  }
+
+  private static Index buildIndex(final String pathToScan) throws IOException {
+    Indexer indexer = new Indexer();
+    collectClasses(pathToScan)
+        .forEach(path -> {
+          final String absolutePath = path.toFile().getAbsolutePath();
+          try {
+            final FileInputStream fileInputStream = new FileInputStream(absolutePath);
+            indexer.index(fileInputStream);
+          } catch (IOException e) {
+            System.err.println("Can't process " + absolutePath);
+          }
+        });
+    return indexer.complete();
+  }
+
+  private static Index readIndex(final String indexPath) throws IOException {
+    IndexReader reader = new IndexReader(new FileInputStream(indexPath));
+    return reader.read();
+  }
+
+  private static Stream<Path> collectClasses(final String pathToScan) throws IOException {
+    return Files.walk(Paths.get(pathToScan))
+        .filter(path -> path.toString().endsWith("class"));
   }
 
   private static void usage() {
@@ -163,7 +287,7 @@ public class Main {
     }
   }
 
-  private static void calculateScanExclude(final Index index) {
+  private static Set<String> calculateScanExclude(final Index index) {
     // TODO: decide if the inclusion of inner classes in the exclusion list does make sense
     final Set<String> excludedFromScanning = index.getKnownClasses().stream().map(classInfo -> classInfo.toString()).collect(Collectors.toSet());
     excludedFromScanning.removeAll(SESSION_BEANS);
@@ -175,19 +299,14 @@ public class Main {
     excludedFromScanning.removeAll(DECORATORS);
     excludedFromScanning.removeAll(CDI_PRODUCER_BEANS);
     excludedFromScanning.removeAll(CDI_INJECTION_POINTS_INSTANCE);
-    StringBuilder snippet = new StringBuilder();
-    snippet.append("<scan>\n");
-    final String template = "  <exclude name=\"%s\" />";
-
-    final TreeSet<String> sorted = new TreeSet<>(excludedFromScanning);
-    for (String entry : sorted) {
-      if (!MANUALLY_REMOVED_FROM_EXCLUSION.contains(entry) && !isPackageInfo(entry)) {
-        snippet.append(String.format(template, entry));
-        snippet.append("\n");
+    final Iterator<String> iterator = excludedFromScanning.iterator();
+    while (iterator.hasNext()) {
+      final String next = iterator.next();
+      if (isPackageInfo(next)) {
+        iterator.remove();
       }
     }
-    snippet.append("</scan>\n");
-    System.out.println(snippet.toString());
+    return new TreeSet<>(excludedFromScanning);
   }
 
   // package-info classes break weld deployment
