@@ -104,7 +104,6 @@ public class Main {
     findDecorators(index);
     findProducers(index);
     findQualifierAnnotated(index);
-    // is include list faster then exclude?
     calculateScanWeldInclude(index);
 
     final Set<String> scanExclude = calculateScanExclude(index);
@@ -137,8 +136,10 @@ public class Main {
     final Element document = beansXml.getDocumentElement();
     document.normalize();
     final NodeList scan = document.getElementsByTagName("scan");
-    if (scan.getLength() == 1) {
-      // remove
+    if (scan.getLength() > 0) {
+      for (int i = 0; i < scan.getLength(); i++) {
+        document.removeChild(scan.item(i));
+      }
     }
 
     final Element scanElement = beansXml.createElement("scan");
@@ -149,6 +150,7 @@ public class Main {
     }
     document.appendChild(scanElement);
 
+    document.normalize();
     writeXml(beansXmlPath, document);
   }
 
@@ -204,7 +206,16 @@ public class Main {
 
   private static void usage() {
     System.out.println("Usage:");
-    System.out.println("  java -jar target/java -jar target/jandex-2-cdi12-scan-exclude-list.jar path-to-jandex.idx");
+    System.out.println("  java -jar target/java -jar target/jandex-2-cdi12-scan-exclude-list.jar dir|idx [beansXml]");
+    System.out.println("Examples:");
+    System.out.println("1. read existing jandex index and output scan node to std out");
+    System.out.println("  java -jar target/java -jar target/jandex-2-cdi12-scan-exclude-list.jar idx=input_path_to_jandex_idx");
+    System.out.println("2. read existing jandex index and update beans.xml");
+    System.out.println("  java -jar target/java -jar target/jandex-2-cdi12-scan-exclude-list.jar idx=input_path_to_jandex_idx beansXml=output_path_to_beans_xml");
+    System.out.println("3. build jandex from compiled classes and output scan node to std out");
+    System.out.println("  java -jar target/java -jar target/jandex-2-cdi12-scan-exclude-list.jar dir=input_path_to_classes_dir");
+    System.out.println("4. build jandex from compiled classes and update beans.xml");
+    System.out.println("  java -jar target/java -jar target/jandex-2-cdi12-scan-exclude-list.jar dir=input_path_to_classes_dir beansXml=output_path_to_beans_xml");
   }
 
   // TODO: what todo with this one
