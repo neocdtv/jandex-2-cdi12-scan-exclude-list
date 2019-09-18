@@ -43,6 +43,13 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+
+/*
+  TODOs:
+  1. add support for @Inject private List<SomeBean> somebeans
+  2. add support for @Resource injection?
+  3.
+ */
 public class Main {
   public final static Set<String> SESSION_BEANS = new HashSet<>();
   public final static Set<String> CDI_SCOPED_BEANS = new HashSet<>();
@@ -389,7 +396,8 @@ public class Main {
           switch (type.kind()) {
             case PARAMETERIZED_TYPE:
               // expecting javax.enterprise.inject.Instance
-              if (fieldInfo.type().asParameterizedType().name().toString().equals("javax.enterprise.inject.Instance")) {
+              final String parametrizedType = fieldInfo.type().asParameterizedType().name().toString();
+              if (parametrizedType.equals("javax.enterprise.inject.Instance")) {
                 // does it also work with subclasses or only with interfaces?
                 final Type interfaceType = fieldInfo.type().asParameterizedType().arguments().get(0);
                 final DotName simple = DotName.createSimple(interfaceType.toString());
@@ -397,6 +405,9 @@ public class Main {
                 final Set<String> interfaceRealizations = allKnownImplementors.stream().map(classInfo -> classInfo.toString()).collect(Collectors.toSet());
                 CDI_INJECTION_POINTS_INSTANCE.add(interfaceType.toString());
                 CDI_INJECTION_POINTS_INSTANCE.addAll(interfaceRealizations);
+              } else if (parametrizedType.equals("javax.enterprise.event.Event")){
+                final Type eventType = fieldInfo.type().asParameterizedType().arguments().get(0);
+                CDI_INJECTION_POINTS_INSTANCE.add(eventType.toString());
               } else {
                 System.out.println("not really expecting other stuff than javax.enterprise.inject.Instance, we need to investigate dear Watson");
               }
