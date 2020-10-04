@@ -15,7 +15,6 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
         <jandex.version>2.1.1.Final</jandex.version>
-        <tycho-compiler-jdt.version>1.4.0</tycho-compiler-jdt.version>
         <jandex-maven-plugin.version>1.0.5</jandex-maven-plugin.version>
         <shade.version>3.1.0</shade.version>
     </properties>
@@ -104,34 +103,4 @@
             </plugin>
         </plugins>
     </build>
-
-    <profiles>
-        <profile>
-            <id>development</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-compiler-plugin</artifactId>
-                        <version>${maven-compiler-plugin.version}</version>
-                        <configuration>
-                            <useIncrementalCompilation>false</useIncrementalCompilation>
-                            <compilerId>jdt</compilerId>
-                            <source>${maven.compiler.source}</source>
-                            <target>${maven.compiler.target}</target>
-                            <showWarnings>true</showWarnings>
-                            <showDeprecation>true</showDeprecation>
-                        </configuration>
-                        <dependencies>
-                            <dependency>
-                                <groupId>org.eclipse.tycho</groupId>
-                                <artifactId>tycho-compiler-jdt</artifactId>
-                                <version>${tycho-compiler-jdt.version}</version>
-                            </dependency>
-                        </dependencies>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 </project>

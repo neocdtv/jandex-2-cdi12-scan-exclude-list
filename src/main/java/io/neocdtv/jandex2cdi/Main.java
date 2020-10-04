@@ -51,15 +51,7 @@ import java.util.stream.Stream;
   3.
  */
 public class Main {
-  public final static Set<String> SESSION_BEANS = new HashSet<>();
-  public final static Set<String> CDI_SCOPED_BEANS = new HashSet<>();
-  public final static Set<String> CDI_INJECTION_TARGETS = new HashSet<>();
-  public final static Set<String> CDI_INJECTION_POINTS = new HashSet<>();
-  public final static Set<String> CDI_PRODUCER_BEANS = new HashSet<>();
-  public final static Set<String> CDI_INJECTION_POINTS_INSTANCE = new HashSet<>();
-  public final static Set<String> INTERCEPTORS = new HashSet<>();
-  public final static Set<String> DECORATORS = new HashSet<>();
-  public final static Set<String> JAX_RS_BEANS = new HashSet<>();
+
   public final static List<String> SESSION_BEANS_ANNOTATIONS = Arrays.asList(
       "javax.ejb.Stateless",
       "javax.ejb.Singleton",
@@ -78,14 +70,25 @@ public class Main {
       "javax.ws.rs.Path",
       "javax.ws.rs.ext.Provider");
 
+  public final static Set<String> SESSION_BEANS = new HashSet<>();
+  public final static Set<String> CDI_SCOPED_BEANS = new HashSet<>();
+  public final static Set<String> CDI_INJECTION_TARGETS = new HashSet<>();
+  public final static Set<String> CDI_INJECTION_POINTS = new HashSet<>();
+  public final static Set<String> CDI_PRODUCER_BEANS = new HashSet<>();
+  public final static Set<String> CDI_INJECTION_POINTS_INSTANCE = new HashSet<>();
+  public final static Set<String> INTERCEPTORS = new HashSet<>();
+  public final static Set<String> DECORATORS = new HashSet<>();
+  public final static Set<String> JAX_RS_BEANS = new HashSet<>();
+
   static {
   }
 
-  private static final boolean DEBUG = false;
+  private static boolean DEBUG = false;
 
   private final static String ARG_NAME_DIR = "dir";
   private final static String ARG_NAME_IDX = "idx";
   private final static String ARG_NAME_BEANS_XML = "beansXml";
+  private final static String ARG_DEBUG = "debug";
 
   // TODO: inner classes
   public static void main(String[] args) throws IOException, ParserConfigurationException, SAXException, TransformerException, XPathExpressionException {
@@ -93,6 +96,9 @@ public class Main {
     Index index = null;
     final String dir = CliUtil.findCommandArgumentByName(ARG_NAME_DIR, args);
     final String idx = CliUtil.findCommandArgumentByName(ARG_NAME_IDX, args);
+    if( CliUtil.findCommandArgumentByName(ARG_DEBUG, args) != null ) {
+      DEBUG = true;
+    }
     if (dir != null) {
       index = buildIndex(dir);
     } else if (idx != null) {
@@ -102,7 +108,10 @@ public class Main {
       System.exit(1);
     }
 
-    printClasses(index);
+    if (DEBUG) {
+      printClasses(index);
+
+    }
     findEJBs(index);
     findCDIScopedBeans(index);
     findJAXRSBeans(index);
@@ -117,10 +126,23 @@ public class Main {
 
     final String cdiConfig = CliUtil.findCommandArgumentByName(ARG_NAME_BEANS_XML, args);
     if (cdiConfig != null) {
-      updateBeansXml(cdiConfig, scanExclude);
+      updateBeansXmlWithScanExclude(cdiConfig, scanExclude);
     } else {
       printScanExclude(scanExclude);
     }
+    printScanExcludeForArc(scanExclude);
+  }
+
+  private static void printScanExcludeForArc(final Set<String> excludedFromScanning) {
+    StringBuilder snippet = new StringBuilder();
+
+    for (String entry : excludedFromScanning) {
+      if (!MANUALLY_REMOVED_FROM_EXCLUSION.contains(entry) && !isPackageInfo(entry)) {
+        snippet.append(entry);
+        snippet.append(",");
+      }
+    }
+    System.out.println(snippet.toString());
   }
 
   private static void printScanExclude(final Set<String> excludedFromScanning) {
@@ -138,7 +160,7 @@ public class Main {
     System.out.println(snippet.toString());
   }
 
-  private static void updateBeansXml(final String beansXmlPath, final Set<String> scanExclude) throws ParserConfigurationException, IOException, SAXException, TransformerException, XPathExpressionException {
+  private static void updateBeansXmlWithScanExclude(final String beansXmlPath, final Set<String> scanExclude) throws ParserConfigurationException, IOException, SAXException, TransformerException, XPathExpressionException {
     Document beansXml = readXml(beansXmlPath);
     final Element document = beansXml.getDocumentElement();
     document.normalize();
@@ -175,6 +197,7 @@ public class Main {
     transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
     transformer.setOutputProperty(OutputKeys.INDENT, "yes");
     transformer.setOutputProperty(OutputKeys.DOCTYPE_PUBLIC, "yes");
+
     DOMSource domSource = new DOMSource(document);
     StreamResult streamResult = new StreamResult(new File(beansXmlPath));
     transformer.transform(domSource, streamResult);
@@ -257,6 +280,7 @@ public class Main {
     includedInScanning.addAll(CDI_INJECTION_POINTS_INSTANCE);
 
     StringBuilder snippet = new StringBuilder();
+    // namespace: xmlns:weld="http://jboss.org/schema/weld/beans"
     snippet.append("<weld:scan>\n");
     final String template = "  <weld:include name=\"%s\" />";
     final TreeSet<String> sorted = new TreeSet<>(includedInScanning);
