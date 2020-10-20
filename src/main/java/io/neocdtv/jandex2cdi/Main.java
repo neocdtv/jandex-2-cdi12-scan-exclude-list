@@ -89,6 +89,7 @@ public class Main {
   private final static String ARG_NAME_IDX = "idx";
   private final static String ARG_NAME_BEANS_XML = "beansXml";
   private final static String ARG_DEBUG = "debug";
+  private final static String ARG_MANUALLY_EXCLUDED = "excluded";
 
   // TODO: inner classes
   public static void main(String[] args) throws IOException, ParserConfigurationException, SAXException, TransformerException, XPathExpressionException {
@@ -110,8 +111,13 @@ public class Main {
 
     if (DEBUG) {
       printClasses(index);
-
     }
+
+    final String manuallyExcluded = CliUtil.findCommandArgumentByName(ARG_MANUALLY_EXCLUDED, args);
+    if (manuallyExcluded != null) {
+      MANUALLY_REMOVED_FROM_EXCLUSION.addAll(Arrays.asList(manuallyExcluded.split(",")));
+    }
+
     findEJBs(index);
     findCDIScopedBeans(index);
     findJAXRSBeans(index);
@@ -344,11 +350,15 @@ public class Main {
     final Iterator<String> iterator = excludedFromScanning.iterator();
     while (iterator.hasNext()) {
       final String next = iterator.next();
-      if (isPackageInfo(next)) {
+      if (isPackageInfo(next) || isManuallyExcluded(next)) {
         iterator.remove();
       }
     }
     return new TreeSet<>(excludedFromScanning);
+  }
+
+  private static boolean isManuallyExcluded(String next) {
+    return MANUALLY_REMOVED_FROM_EXCLUSION.contains(next);
   }
 
   // package-info classes break weld deployment
